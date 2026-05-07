@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0a0a0c">
+    <title>OmniHub Ultra</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono&display=swap');
+        :root { --bg: #0a0a0c; --card: #16161a; --accent: #3b82f6; }
+        .light { --bg: #f8fafc; --card: #ffffff; --accent: #2563eb; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: var(--bg); color: #e2e8f0; transition: background 0.3s, color 0.3s; scroll-behavior: smooth; }
+        .light body { color: #1e293b; }
+        .glass { background: rgba(22, 22, 26, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .light .glass { background: rgba(255, 255, 255, 0.7); border: 1px solid rgba(0, 0, 0, 0.05); }
+        .tab-content { display: none; animation: slideUp 0.3s ease-out; }
+        .tab-content.active { display: block; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .nav-btn.active { color: var(--accent); transform: translateY(-4px); }
+        .game-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 2rem; border-radius: 1rem; cursor: pointer; transition: 0.2s; background: rgba(255,255,255,0.05); }
+        .memory-card { perspective: 1000px; height: 80px; cursor: pointer; }
+        .memory-card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.6s; transform-style: preserve-3d; }
+        .memory-card.flipped .memory-card-inner { transform: rotateY(180deg); }
+        .memory-card-front, .memory-card-back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 2rem; }
+        .memory-card-back { background: var(--accent); transform: rotateY(180deg); }
+        .memory-card-front { background: rgba(255,255,255,0.1); }
+        ::-webkit-scrollbar { width: 0; }
+        .safe-bottom { padding-bottom: calc(env(safe-area-inset-bottom) + 90px); }
+        .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 99px; background: var(--accent); color: white; opacity: 0; transition: 0.3s; z-index: 1000; pointer-events: none; }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(-10px); }
+    </style>
+</head>
+<body class="selection:bg-blue-500/30 overflow-x-hidden">
+
+<div id="toast" class="toast font-bold shadow-lg shadow-blue-500/20"></div>
+
+<header class="fixed top-0 w-full z-50 glass px-6 py-4 flex justify-between items-center">
+    <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-blue-500/40">
+            <i class="fas fa-cube text-sm"></i>
+        </div>
+        <h1 class="text-xl font-bold tracking-tight">OmniHub <span class="text-blue-500">Ultra</span></h1>
+    </div>
+    <div class="flex items-center gap-2">
+        <button onclick="toggleTheme()" class="p-2.5 rounded-xl hover:bg-white/5 transition-all active:scale-90" title="Dark/Light Mode">
+            <i id="themeIcon" class="fas fa-moon text-lg"></i>
+        </button>
+        <button onclick="toggleSettings()" class="p-2.5 rounded-xl hover:bg-white/5 transition-all active:scale-90">
+            <i class="fas fa-cog text-lg"></i>
+        </button>
+    </div>
+</header>
+
+<main class="pt-24 px-4 safe-bottom min-h-screen">
+    <!-- Alerts -->
+    <div id="alertBanner" class="hidden mb-4 p-4 rounded-2xl bg-red-500/20 border border-red-500/50 text-red-200 flex items-center gap-3">
+        <i class="fas fa-cloud-showers-heavy"></i>
+        <span class="text-sm font-medium">Precipitation alert in the next 12 hours!</span>
+    </div>
+
+    <!-- Weather Section -->
+    <section id="weather" class="tab-content active">
+        <div class="mb-6 flex gap-2">
+            <div class="relative flex-1">
+                <input type="text" id="citySearch" placeholder="Search city..." class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all">
+                <button onclick="startVoice('weather')" class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-500">
+                    <i class="fas fa-microphone"></i>
+                </button>
+            </div>
+            <button onclick="getWeatherByGPS()" id="gpsBtn" class="p-4 bg-slate-800 rounded-2xl hover:bg-slate-700 active:scale-95 transition-all">
+                <i class="fas fa-location-arrow"></i>
+            </button>
+        </div>
+
+        <div id="weatherHero" class="mb-6 p-8 rounded-[2.5rem] glass text-center relative overflow-hidden group">
+            <div class="animate-pulse py-12">Loading weather...</div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-6" id="weatherStats"></div>
+
+        <div class="glass p-6 rounded-3xl mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">7-Day Forecast</h3>
+                <i class="fas fa-calendar-alt text-slate-500"></i>
+            </div>
+            <div id="forecast" class="space-y-4"></div>
+        </div>
+    </section>
+
+    <!-- Games Section -->
+    <section id="games" class="tab-content">
+        <div class="flex p-1.5 bg-white/5 rounded-2xl mb-6 gap-1">
+            <button onclick="switchGame('ttt')" class="game-nav flex-1 py-3 px-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all active bg-blue-600 shadow-lg shadow-blue-500/20">Tic-Tac-Toe</button>
+            <button onclick="switchGame('rps')" class="game-nav flex-1 py-3 px-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all">RPS</button>
+            <button onclick="switchGame('mem')" class="game-nav flex-1 py-3 px-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all">Memory</button>
+        </div>
+
+        <div id="gameArea" class="glass p-6 rounded-[2.5rem] text-center min-h-[400px] flex flex-col justify-center"></div>
+    </section>
+
+    <!-- Files Section -->
+    <section id="files" class="tab-content">
+        <div id="dropZone" class="p-12 mb-6 border-2 border-dashed border-white/10 rounded-[2.5rem] glass flex flex-col items-center justify-center text-center transition-all cursor-pointer hover:border-blue-500/50" onclick="document.getElementById('fileInput').click()">
+            <input type="file" id="fileInput" multiple hidden onchange="handleFiles(this.files)">
+            <div class="w-20 h-20 bg-blue-600/10 rounded-full flex items-center justify-center mb-4 text-blue-500">
+                <i class="fas fa-cloud-upload-alt text-3xl"></i>
+            </div>
+            <h3 class="text-lg font-bold">Drop files here</h3>
+            <p class="text-slate-500 text-sm mt-1">Simulate organization & de-duplication</p>
+        </div>
+
+        <div id="fileActions" class="hidden mb-6 flex gap-2">
+            <button onclick="bulkRename()" class="flex-1 py-4 bg-slate-800 rounded-2xl text-xs font-bold uppercase">Rename</button>
+            <button onclick="exportFiles()" class="flex-1 py-4 bg-blue-600 rounded-2xl text-xs font-bold uppercase">Export</button>
+            <button onclick="clearFiles()" class="flex-1 py-4 bg-red-500/10 text-red-500 rounded-2xl text-xs font-bold uppercase">Clear</button>
+        </div>
+
+        <div id="fileList" class="space-y-4"></div>
+    </section>
+
+    <!-- Converters Section -->
+    <section id="converters" class="tab-content">
+        <div class="space-y-6">
+            <!-- Currency -->
+            <div class="glass p-6 rounded-[2.5rem]">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Global Currency</h3>
+                    <button onclick="swapCurrency()" class="text-blue-500"><i class="fas fa-exchange-alt"></i></button>
+                </div>
+                <div class="space-y-4">
+                    <div class="relative">
+                        <input type="number" id="currFromVal" value="1" oninput="convertCurrency()" class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 pr-32 font-mono text-xl">
+                        <select id="currFromType" onchange="convertCurrency()" class="absolute right-2 top-2 bottom-2 bg-slate-800 rounded-xl px-3 text-sm focus:ring-1 ring-blue-500">
+                            <option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="JPY">JPY</option><option value="INR">INR</option>
+                        </select>
+                    </div>
+                    <div class="relative">
+                        <input type="number" id="currToVal" readonly class="w-full bg-white/10 border border-white/10 rounded-2xl px-5 py-4 pr-32 font-mono text-xl text-slate-400">
+                        <select id="currToType" onchange="convertCurrency()" class="absolute right-2 top-2 bottom-2 bg-slate-800 rounded-xl px-3 text-sm focus:ring-1 ring-blue-500">
+                            <option value="EUR">EUR</option><option value="USD">USD</option><option value="GBP">GBP</option><option value="JPY">JPY</option><option value="INR">INR</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EMI -->
+            <div class="glass p-6 rounded-[2.5rem]">
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6">EMI Calculator</h3>
+                <div class="space-y-4">
+                    <input type="number" id="emiPrincipal" placeholder="Amount (e.g. 10000)" class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4">
+                    <div class="flex gap-2">
+                        <input type="number" id="emiRate" placeholder="Rate %" class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-4 min-w-0">
+                        <input type="number" id="emiTenure" placeholder="Years" class="flex-[1.4] bg-white/5 border border-white/10 rounded-2xl px-5 py-4 min-w-0">
+                    </div>
+                    <button onclick="calcEMI()" class="w-full py-4 bg-blue-600 rounded-2xl font-bold">Calculate</button>
+                    <div id="emiResult" class="hidden mt-4 pt-4 border-t border-white/5 text-center"></div>
+                </div>
+            </div>
+
+            <!-- Units -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="glass p-6 rounded-[2rem]">
+                    <h3 class="text-[10px] font-bold text-slate-500 uppercase mb-4">Weight</h3>
+                    <input type="number" id="unitKg" oninput="convertUnit('kg')" placeholder="KG" class="w-full bg-white/5 rounded-xl p-3 mb-2 font-mono text-sm">
+                    <input type="number" id="unitLb" oninput="convertUnit('lb')" placeholder="LB" class="w-full bg-white/5 rounded-xl p-3 font-mono text-sm">
+                </div>
+                <div class="glass p-6 rounded-[2rem]">
+                    <h3 class="text-[10px] font-bold text-slate-500 uppercase mb-4">Temp</h3>
+                    <input type="number" id="unitC" oninput="convertUnit('c')" placeholder="°C" class="w-full bg-white/5 rounded-xl p-3 mb-2 font-mono text-sm">
+                    <input type="number" id="unitF" oninput="convertUnit('f')" placeholder="°F" class="w-full bg-white/5 rounded-xl p-3 font-mono text-sm">
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<!-- Bottom Nav -->
+<nav class="fixed bottom-0 w-full z-50 glass border-t border-white/5 px-2 h-20 flex bg-black/40">
+    <button onclick="switchTab('weather')" id="nav-weather" class="nav-btn active flex-1 flex flex-col items-center justify-center gap-1 transition-all">
+        <i class="fas fa-cloud-sun text-lg"></i><span class="text-[9px] font-bold uppercase">Weather</span>
+    </button>
+    <button onclick="switchTab('games')" id="nav-games" class="nav-btn flex-1 flex flex-col items-center justify-center gap-1 transition-all">
+        <i class="fas fa-gamepad text-lg"></i><span class="text-[9px] font-bold uppercase">Games</span>
+    </button>
+    <button onclick="switchTab('files')" id="nav-files" class="nav-btn flex-1 flex flex-col items-center justify-center gap-1 transition-all">
+        <i class="fas fa-folder-open text-lg"></i><span class="text-[9px] font-bold uppercase">Files</span>
+    </button>
+    <button onclick="switchTab('converters')" id="nav-converters" class="nav-btn flex-1 flex flex-col items-center justify-center gap-1 transition-all">
+        <i class="fas fa-calculator text-lg"></i><span class="text-[9px] font-bold uppercase">Tools</span>
+    </button>
+</nav>
+
+<!-- Settings Modal -->
+<div id="settings" class="fixed inset-0 z-[100] hidden">
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-md" onclick="toggleSettings()"></div>
+    <div class="absolute bottom-0 w-full glass rounded-t-[3rem] p-10 transform translate-y-full transition-transform" id="settingsPanel">
+        <div class="w-12 h-1.5 bg-white/10 rounded-full mx-auto mb-8"></div>
+        <h2 class="text-2xl font-bold mb-8">Configuration</h2>
+        <div class="space-y-6">
+            <div>
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">OpenWeather API Key</label>
+                <input type="password" id="weatherApiKey" placeholder="Paste key here..." class="w-full bg-white/5 border border-white/10 p-4 rounded-xl focus:ring-1 ring-blue-500 outline-none">
+            </div>
+            <div class="flex justify-between items-center p-4 bg-white/5 rounded-2xl">
+                <span class="font-medium text-sm">Haptic Feedback</span>
+                <button onclick="toggleHaptic()" id="hapticToggle" class="w-10 h-5 bg-blue-600 rounded-full relative">
+                    <div class="absolute w-4 h-4 bg-white rounded-full top-0.5 right-0.5"></div>
+                </button>
+            </div>
+            <button onclick="saveSettings()" class="w-full py-5 bg-blue-600 rounded-2xl font-bold shadow-xl shadow-blue-600/30">Save & Apply</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // State & Constants
+    const getScores = () => {
+        const saved = JSON.parse(localStorage.getItem('scores')) || {};
+        return {
+            ttt: { x: 0, o: 0, t: 0, ...(saved.ttt || {}) },
+            rps: { p: 0, c: 0, t: 0, ...(saved.rps || {}) }
+        };
+    };
+    const S = {
+        key: localStorage.getItem('owm_key') || '',
+        theme: localStorage.getItem('theme') || 'dark',
+        haptic: localStorage.getItem('haptic') !== 'false',
+        scores: getScores(),
+        files: []
+    };
+
+    // Utils
+    const showToast = (m) => { const el = document.getElementById('toast'); el.innerText = m; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 2000); };
+    const haptic = (p = 20) => { if(S.haptic && navigator.vibrate) navigator.vibrate(p); };
+    const toggleTheme = () => { S.theme = S.theme === 'dark' ? 'light' : 'dark'; document.documentElement.classList.toggle('dark', S.theme === 'dark'); localStorage.setItem('theme', S.theme); document.getElementById('themeIcon').className = `fas fa-${S.theme==='dark'?'moon':'sun'} text-lg`; haptic(50); };
+    const switchTab = (t) => { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.getElementById(t).classList.add('active'); document.querySelectorAll('.nav-btn').forEach(btn=>btn.classList.remove('active')); document.getElementById('nav-'+t).classList.add('active'); haptic(10); if(t==='converters') convertCurrency(); };
+
+    // Weather Logic
+    const getWeatherByGPS = () => { 
+        if(!navigator.geolocation) return showToast("GPS not supported");
+        haptic(50);
+        navigator.geolocation.getCurrentPosition(p=>fetchWeather({lat: p.coords.latitude, lon: p.coords.longitude}), ()=>showToast("Access denied"));
+    };
+    const fetchWeather = async (q) => {
+        const url = S.key ? `https://api.openweathermap.org/data/2.5/forecast?${q.lat?`lat=${q.lat}&lon=${q.lon}`:`q=${q.city}`}&units=metric&appid=${S.key}` : null;
+        if(!url) return renderMockWeather(q.city || "Current Location");
+        try { const r = await fetch(url); const d = await r.json(); if(r.ok) renderWeather(d); else throw d; } 
+        catch(e) { showToast(e.message || "Weather Error"); renderMockWeather(q.city || "Error Loc"); }
+    };
+    const renderWeather = (d) => {
+        const cur = d.list[0];
+        const hero = document.getElementById('weatherHero');
+        hero.innerHTML = `
+            <div class="relative z-10">
+                <span class="text-[10px] font-bold text-blue-500 uppercase tracking-widest">${d.city.name}</span>
+                <div class="text-7xl font-bold tracking-tighter my-2">${Math.round(cur.main.temp)}°</div>
+                <div class="text-lg font-medium text-slate-400 capitalize">${cur.weather[0].description}</div>
+                <div class="mt-6 flex justify-center gap-6 text-xs text-slate-500 font-mono">
+                    <span>H: ${Math.round(cur.main.temp_max)}°</span><span>L: ${Math.round(cur.main.temp_min)}°</span>
+                    <span>HUM: ${cur.main.humidity}%</span>
+                </div>
+            </div>`;
+        const stats = document.getElementById('weatherStats');
+        stats.innerHTML = [
+            {label: 'Wind', val: Math.round(cur.wind.speed*3.6)+'kmh', icon: 'wind'},
+            {label: 'Feels Like', val: Math.round(cur.main.feels_like)+'°', icon: 'thermometer-half'},
+            {label: 'Visibility', val: (cur.visibility/1000).toFixed(1)+'km', icon: 'eye'},
+            {label: 'Cloudy', val: cur.clouds.all+'%', icon: 'cloud'}
+        ].map(s=>`<div class="glass p-5 rounded-3xl flex items-center gap-4">
+            <div class="w-10 h-10 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500"><i class="fas fa-${s.icon}"></i></div>
+            <div><p class="text-[10px] uppercase font-bold text-slate-500">${s.label}</p><p class="text-sm font-mono">${s.val}</p></div>
+        </div>`).join('');
+        
+        const fc = document.getElementById('forecast');
+        fc.innerHTML = d.list.filter((_,i)=>i%8===0).slice(1,6).map(day=>`
+            <div class="flex justify-between items-center">
+                <span class="text-sm font-bold w-12">${new Date(day.dt*1000).toLocaleDateString(undefined,{weekday:'short'})}</span>
+                <img src="https://openweathermap.org/img/wn/${day.weather[0].icon}.png" class="w-10 h-10">
+                <div class="font-mono text-sm">${Math.round(day.main.temp_max)}° <span class="text-slate-500">/ ${Math.round(day.main.temp_min)}°</span></div>
+            </div>`).join('');
+    };
+    const renderMockWeather = (loc) => renderWeather({city:{name:loc+" (Demo)"}, list: Array(40).fill(0).map((_,i)=>({dt:Date.now()/1000+i*3600, main:{temp:20+Math.random()*5, temp_max:25, temp_min:15, humidity:40, feels_like:22}, weather:[{description:"Clear", icon:"01d"}], wind:{speed:5}, clouds:{all:0}, visibility:10000}))});
+
+    // Games Logic
+    let gS = { ttt: { b: Array(9).fill(''), p: 'X', a: true }, rps: { c: ['✊','✋','✌️'], s: 'Ready' }, mem: { c: [], f: [], m: 0, t: 0, i: null } };
+    const switchGame = (g) => {
+        const btns = document.querySelectorAll('.game-nav');
+        btns.forEach(b=>b.classList.remove('bg-blue-600','shadow-lg','active'));
+        const idx = {'ttt':0, 'rps':1, 'mem':2}[g];
+        if(btns[idx]) btns[idx].classList.add('bg-blue-600','shadow-lg','active');
+        const area = document.getElementById('gameArea');
+        if(g==='ttt') {
+            area.innerHTML = `
+                <div class="mb-6 flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                    <div>P1 (X): ${S.scores.ttt.x}</div><div>P2 (O): ${S.scores.ttt.o}</div>
+                </div>
+                <div id="tttBoard" class="grid grid-cols-3 gap-3 w-72 mx-auto"></div>
+                <button onclick="resetTTT()" class="mt-8 py-3 px-6 bg-slate-800 rounded-xl text-xs font-bold uppercase">Reset Board</button>`;
+            const board = document.getElementById('tttBoard');
+            gS.ttt.b.forEach((v,i)=> {
+                const c = document.createElement('div'); c.className = 'game-cell'; c.innerText = v;
+                c.onclick = () => { if(gS.ttt.b[i] || !gS.ttt.a) return; haptic(); gS.ttt.b[i]=gS.ttt.p; c.innerText=gS.ttt.p; c.style.color=gS.ttt.p==='X'?'#3b82f6':'#22c55e'; checkTTT(); };
+                board.appendChild(c);
+            });
+        } else if(g==='rps') {
+            area.innerHTML = `
+                <div class="text-6xl mb-12" id="rpsAIPic">🤖</div>
+                <div class="text-sm font-bold uppercase tracking-widest text-slate-500 mb-8" id="rpsMsg">Vs Computer</div>
+                <div class="flex gap-4 justify-center">
+                    <button onclick="playRPS(0)" class="w-20 h-20 bg-white/5 rounded-2xl text-3xl hover:bg-blue-500/20 active:scale-90 transition-all">✊</button>
+                    <button onclick="playRPS(1)" class="w-20 h-20 bg-white/5 rounded-2xl text-3xl hover:bg-blue-500/20 active:scale-90 transition-all">✋</button>
+                    <button onclick="playRPS(2)" class="w-20 h-20 bg-white/5 rounded-2xl text-3xl hover:bg-blue-500/20 active:scale-90 transition-all">✌️</button>
+                </div>
+                <div class="mt-12 text-[10px] font-bold uppercase tracking-widest text-slate-500">Wins: ${S.scores.rps.p} | Losses: ${S.scores.rps.c}</div>`;
+        } else if(g==='mem') {
+            const emojis = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🦁','🐯','🦒','🐘','🐼','🦒','🐘','🦁'];
+            area.innerHTML = `
+                <div class="flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-6">
+                    <div>Moves: <span id="memMoves">0</span></div><div>Time: <span id="memTime">0</span>s</div>
+                </div>
+                <div class="grid grid-cols-4 gap-2" id="memBoard"></div>
+                <button onclick="switchGame('mem')" class="mt-8 py-3 px-6 bg-slate-800 rounded-xl text-xs font-bold uppercase">New Game</button>`;
+            gS.mem.c = emojis.sort(()=>Math.random()-0.5); gS.mem.f = []; gS.mem.m = 0; gS.mem.t = 0; clearInterval(gS.mem.i);
+            gS.mem.i = setInterval(()=>{gS.mem.t++; document.getElementById('memTime').innerText=gS.mem.t;}, 1000);
+            const board = document.getElementById('memBoard');
+            gS.mem.c.forEach((e,i)=>{
+                const card = document.createElement('div'); card.className='memory-card'; card.innerHTML=`<div class="memory-card-inner"><div class="memory-card-front">?</div><div class="memory-card-back">${e}</div></div>`;
+                card.onclick = () => { if(card.classList.contains('flipped') || gS.mem.f.length===2) return; haptic(); card.classList.add('flipped'); gS.mem.f.push({e, card}); if(gS.mem.f.length===2) { gS.mem.m++; document.getElementById('memMoves').innerText=gS.mem.m; checkMem(); } };
+                board.appendChild(card);
+            });
+        }
+    };
+    const checkTTT = () => {
+        const w = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+        let winner = null;
+        w.forEach(p=>{ if(gS.ttt.b[p[0]] && gS.ttt.b[p[0]]===gS.ttt.b[p[1]] && gS.ttt.b[p[0]]===gS.ttt.b[p[2]]) winner = gS.ttt.b[p[0]]; });
+        if(winner) { gS.ttt.a=false; S.scores.ttt[winner.toLowerCase()]++; localStorage.setItem('scores', JSON.stringify(S.scores)); showToast(winner+" wins!"); setTimeout(()=>switchGame('ttt'), 1500); haptic(200); }
+        else if(!gS.ttt.b.includes('')) { showToast("Tie!"); setTimeout(()=>switchGame('ttt'), 1500); }
+        else gS.ttt.p = gS.ttt.p==='X'?'O':'X';
+    };
+    const playRPS = (p) => {
+        const ai = Math.floor(Math.random()*3);
+        const aiPic = ['✊','✋','✌️'][ai];
+        document.getElementById('rpsAIPic').innerText = aiPic;
+        const res = (p===ai)?"Tie!":((p===0&&ai===2)||(p===1&&ai===0)||(p===2&&ai===1))?"Win!":"Loss!";
+        document.getElementById('rpsMsg').innerText = res;
+        if(res==="Win!") S.scores.rps.p++; else if(res==="Loss!") S.scores.rps.c++;
+        localStorage.setItem('scores', JSON.stringify(S.scores));
+        haptic(res==="Win!"?100:50);
+        setTimeout(()=>switchGame('rps'), 2000);
+    };
+    const checkMem = () => {
+        if(gS.mem.f[0].e === gS.mem.f[1].e) { gS.mem.f = []; if(document.querySelectorAll('.memory-card.flipped').length === 16) { clearInterval(gS.mem.i); showToast("Finished in "+gS.mem.t+"s!"); } }
+        else { setTimeout(()=>{ gS.mem.f.forEach(c=>c.card.classList.remove('flipped')); gS.mem.f = []; }, 1000); }
+    };
+    const resetTTT = () => { gS.ttt.b = Array(9).fill(''); gS.ttt.p = 'X'; gS.ttt.a = true; switchGame('ttt'); };
+
+    // Files Logic
+    const handleFiles = (files) => {
+        S.files = Array.from(files).map(f=>({name:f.name, size:f.size, lastModified:f.lastModified, type:f.name.split('.').pop().toLowerCase()}));
+        renderFiles();
+        document.getElementById('fileActions').classList.toggle('hidden', S.files.length===0);
+    };
+    const renderFiles = () => {
+        const list = document.getElementById('fileList');
+        const groups = S.files.reduce((acc,f)=>{ let t = (['pdf','docx','txt'].includes(f.type))?'Docs':(['jpg','png','gif'].includes(f.type))?'Images':(['mp4','mp3'].includes(f.type))?'Media':'Other'; acc[t]=acc[t]||[]; acc[t].push(f); return acc; },{});
+        list.innerHTML = Object.entries(groups).map(([t, fs])=>`
+            <div class="glass p-6 rounded-3xl">
+                <div class="flex justify-between text-xs font-bold uppercase tracking-widest text-blue-500 mb-4"><span>${t}</span><span>${fs.length} Items</span></div>
+                <div class="space-y-3">${fs.map(f=>`<div class="flex justify-between items-center text-xs"><span class="truncate pr-4">${f.name}</span><span class="text-slate-500 font-mono">${(f.size/1024).toFixed(1)}k</span></div>`).join('')}</div>
+            </div>`).join('');
+    };
+    const clearFiles = () => { S.files=[]; renderFiles(); document.getElementById('fileActions').classList.add('hidden'); };
+    const exportFiles = () => { const b = new Blob([JSON.stringify(S.files,null,2)], {type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='file-structure.json'; a.click(); showToast("Report Downloaded"); };
+
+    // Converters
+    const convertUnit = (src) => {
+        const k=document.getElementById('unitKg'), l=document.getElementById('unitLb'), c=document.getElementById('unitC'), f=document.getElementById('unitF');
+        if(src==='kg') l.value = (k.value*2.20462).toFixed(2);
+        else if(src==='lb') k.value = (l.value/2.20462).toFixed(2);
+        else if(src==='c') f.value = (c.value * 9/5 + 32).toFixed(1);
+        else if(src==='f') c.value = ((f.value - 32) * 5/9).toFixed(1);
+    };
+
+    const toggleHaptic = () => {
+        S.haptic = !S.haptic;
+        localStorage.setItem('haptic', S.haptic);
+        const dot = document.getElementById('hapticToggle').querySelector('div');
+        if(dot) {
+            dot.style.left = S.haptic ? 'auto' : '2px';
+            dot.style.right = S.haptic ? '2px' : 'auto';
+        }
+        const b = document.getElementById('hapticToggle');
+        if(b) {
+            b.classList.toggle('bg-blue-600', S.haptic);
+            b.classList.toggle('bg-slate-700', !S.haptic);
+        }
+        haptic(50);
+    };
+
+    const bulkRename = () => {
+        const prefix = prompt("Enter prefix for all files:", "organized_");
+        if(prefix === null) return;
+        S.files = S.files.map(f => ({...f, name: prefix + f.name}));
+        renderFiles();
+        showToast("Files renamed");
+    };
+
+    const swapCurrency = () => {
+        const from = document.getElementById('currFromType'), to = document.getElementById('currToType');
+        const temp = from.value; from.value = to.value; to.value = temp;
+        convertCurrency();
+    };
+    const convertCurrency = async () => {
+        const a=document.getElementById('currFromVal').value, b=document.getElementById('currFromType').value, t=document.getElementById('currToType').value;
+        if(b===t) { document.getElementById('currToVal').value=a; return; }
+        try { const r=await fetch(`https://api.frankfurter.dev/v1/latest?base=${b}&symbols=${t}`); const d=await r.json(); document.getElementById('currToVal').value=(a*d.rates[t]).toFixed(2); }
+        catch{ showToast("Exchanger Offline"); }
+    };
+    const calcEMI = () => {
+        const p=parseFloat(document.getElementById('emiPrincipal').value), r=parseFloat(document.getElementById('emiRate').value)/12/100, n=parseFloat(document.getElementById('emiTenure').value)*12;
+        if(!p||!r||!n) return;
+        const emi = (p*r*Math.pow(1+r,n))/(Math.pow(1+r,n)-1);
+        const res = document.getElementById('emiResult'); res.classList.remove('hidden');
+        res.innerHTML = `<div class="text-[10px] uppercase font-bold text-slate-500">Monthly EMI</div><div class="text-3xl font-bold text-blue-500 my-2">₹${Math.round(emi).toLocaleString()}</div><div class="text-xs text-slate-500">Total: ₹${Math.round(emi*n).toLocaleString()}</div>`;
+        haptic(100);
+    };
+
+    // Settings
+    const toggleSettings = () => { const el = document.getElementById('settings'); const p = document.getElementById('settingsPanel'); if(el.classList.contains('hidden')){ el.classList.remove('hidden'); setTimeout(()=>p.style.transform='translateY(0)', 10); } else { p.style.transform='translateY(100%)'; setTimeout(()=>el.classList.add('hidden'), 300); } };
+    const saveSettings = () => { S.key = document.getElementById('weatherApiKey').value; localStorage.setItem('owm_key', S.key); toggleSettings(); fetchWeather({city: "London"}); showToast("Settings Saved"); };
+    
+    // Voice
+    const startVoice = (type) => {
+        if(!('webkitSpeechRecognition' in window)) return showToast("Voice not supported");
+        const r = new webkitSpeechRecognition(); r.lang='en-US';
+        r.onstart = () => showToast("Listening...");
+        r.onresult = (e) => { 
+            const t = e.results[0][0].transcript; 
+            if(type==='weather') { document.getElementById('citySearch').value=t; fetchWeather({city: t}); }
+            showToast("Got it: "+t);
+        };
+        r.start();
+    };
+
+    // Init
+    window.onload = () => {
+        document.documentElement.classList.toggle('dark', S.theme==='dark');
+        document.getElementById('themeIcon').className = `fas fa-${S.theme==='dark'?'moon':'sun'} text-lg`;
+        document.getElementById('weatherApiKey').value = S.key;
+        
+        // Init Haptic Toggle UI
+        const hBtn = document.getElementById('hapticToggle');
+        const hDot = hBtn.querySelector('div');
+        hBtn.classList.toggle('bg-blue-600', S.haptic);
+        hBtn.classList.toggle('bg-slate-700', !S.haptic);
+        hDot.style.left = S.haptic ? 'auto' : '2px';
+        hDot.style.right = S.haptic ? '2px' : 'auto';
+
+        fetchWeather({city: "New York"});
+        switchGame('ttt');
+    };
+</script>
+</body>
+</html>

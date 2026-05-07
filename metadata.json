@@ -1,0 +1,6 @@
+{
+  "name": "OmniHub Ultra",
+  "description": "The ultimate multi-tool featuring hyper-local weather alerts, classic mini-games, advanced file organization simulation, and comprehensive financial/unit converters.",
+  "requestFramePermissions": ["geolocation", "microphone"],
+  "majorCapabilities": []
+}
